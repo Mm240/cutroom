@@ -19,6 +19,8 @@ jobs:
       - run: npm ci || npm install
       # No credentials, no network. The clip planner is the claim; this proves it.
       - run: npm -w @cutroom/cutplan run test
+      # The API imports cutplan's compiled output, which is not committed.
+      - run: npm -w @cutroom/cutplan run build
       - run: npx tsc -p apps/api/tsconfig.json --noEmit
       - run: npx tsc -p apps/web/tsconfig.json --noEmit
 
