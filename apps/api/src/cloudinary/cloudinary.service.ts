@@ -18,6 +18,15 @@ export interface VideoAsset {
 }
 
 /**
+ * Credentials pasted into a hosting dashboard often carry a trailing space or
+ * newline. Cloudinary then reports "Invalid api_key 4373…" — the stray
+ * character is invisible in the message, so it reads as a wrong key.
+ */
+function env(name: string): string {
+  return (process.env[name] ?? '').trim();
+}
+
+/**
  * Inside a layer reference, a public ID's folder separators must be colons.
  *
  * A raw slash terminates the transformation component, so `l_subtitles:a/b`
@@ -32,13 +41,13 @@ export function layerId(publicId: string): string {
 @Injectable()
 export class CloudinaryService {
   private readonly log = new Logger(CloudinaryService.name);
-  private readonly cloudName = process.env.CLOUDINARY_CLOUD_NAME!;
+  private readonly cloudName = env('CLOUDINARY_CLOUD_NAME');
 
   constructor() {
     cloudinary.config({
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-      api_key: process.env.CLOUDINARY_API_KEY,
-      api_secret: process.env.CLOUDINARY_API_SECRET,
+      cloud_name: this.cloudName,
+      api_key: env('CLOUDINARY_API_KEY'),
+      api_secret: env('CLOUDINARY_API_SECRET'),
       secure: true,
     });
   }
