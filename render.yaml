@@ -1,0 +1,58 @@
+# Render blueprint — one web service (API, worker and console together),
+# plus Postgres for jobs and Key Value (Redis) for the BullMQ queue.
+#
+# Deploy: render.com → New → Blueprint → pick this repo. Render asks for the
+# values marked `sync: false`.
+
+services:
+  - type: web
+    name: cutroom
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: >-
+      npm ci &&
+      npm -w @cutroom/cutplan run build &&
+      npm -w @cutroom/api run build &&
+      npm -w @cutroom/web run build
+    startCommand: node apps/api/dist/main.js
+    healthCheckPath: /api/config
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      # Uploads spend Cloudinary credits; only people with this can upload.
+      - key: UPLOAD_PASSCODE
+        sync: false
+      # Cloudinary's free plan caps a single video at 100 MB.
+      - key: MAX_UPLOAD_MB
+        value: "100"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cutroom-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: cutroom-queue
+          property: connectionString
+
+  - type: keyvalue
+    name: cutroom-queue
+    plan: free
+    region: singapore
+    # BullMQ loses jobs if Redis evicts keys under memory pressure.
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
+databases:
+  - name: cutroom-db
+    plan: free
+    region: singapore
+    databaseName: cutroom
+    user: cutroom

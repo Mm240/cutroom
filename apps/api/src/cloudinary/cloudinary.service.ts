@@ -95,9 +95,12 @@ export class CloudinaryService {
     return null;
   }
 
-  async upload(buffer: Buffer, filename: string, md5: string, language: string): Promise<VideoAsset> {
+  async upload(path: string, filename: string, md5: string, language: string): Promise<VideoAsset> {
+    // upload_large sends the file in chunks, which Cloudinary requires for
+    // big videos, and streams it from disk.
     const res = await new Promise<any>((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
+      cloudinary.uploader.upload_large(
+        path,
         {
           folder: 'cutroom/sources',
           resource_type: 'video',
@@ -107,9 +110,8 @@ export class CloudinaryService {
           tags: [`md5_${md5}`, `lang_${language}`],
           // No speech-to-text here: transcribe() runs it on parallel chunks.
         },
-        (err, result) => (err ? reject(err) : resolve(result)),
+        (err: any, result: any) => (err ? reject(err) : resolve(result)),
       );
-      stream.end(buffer);
     });
 
     const asset = this.toAsset(res, language);

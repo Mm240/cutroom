@@ -83,6 +83,19 @@ npm run dev
 `npm run verify` times the transcription round trip, which is the long pole and
 decides whether you demo live or pre-warm the source.
 
+## Deploying
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Mm240/cutroom)
+
+`render.yaml` sets up one web service — the API, the queue worker and the
+console together, on one URL — plus Postgres and Key Value (Redis). Render
+asks for the Cloudinary keys and an `UPLOAD_PASSCODE`: uploads spend your
+Cloudinary credits, so only people with the passcode can upload. Anyone can
+open a finished job's link.
+
+On the free plan the service sleeps after 15 idle minutes and takes about a
+minute to wake, and the free database expires after 30 days.
+
 ## Architecture
 
 ```

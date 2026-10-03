@@ -1,4 +1,16 @@
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+// In development the API runs on its own port. In production it serves this
+// console itself, so requests go to the same origin. A bare hostname in
+// VITE_API_URL is taken as https.
+const RAW_BASE: string = import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:3001');
+const BASE = !RAW_BASE || RAW_BASE.includes('://') ? RAW_BASE : `https://${RAW_BASE}`;
+
+export interface ApiConfig { passcodeRequired: boolean; maxUploadMb: number }
+
+export async function getConfig(): Promise<ApiConfig> {
+  const r = await fetch(`${BASE}/api/config`);
+  if (!r.ok) throw new Error('Could not load config');
+  return r.json();
+}
 
 export interface Format {
   id: string; label: string; where: string; aspect: string;
@@ -44,13 +56,24 @@ export async function getLanguages(): Promise<Language[]> {
   return r.json();
 }
 
-export async function submit(video: File, clips: number, language: string) {
+export async function submit(video: File, clips: number, language: string, passcode?: string) {
   const form = new FormData();
   form.append('video', video);
   form.append('clips', String(clips));
   form.append('language', language);
-  const r = await fetch(`${BASE}/api/videos`, { method: 'POST', body: form });
-  if (!r.ok) throw new Error((await r.text()) || 'Upload failed');
+  const r = await fetch(`${BASE}/api/videos`, {
+    method: 'POST',
+    body: form,
+    headers: passcode ? { 'x-cutroom-passcode': passcode } : undefined,
+  });
+  if (r.status === 401) throw new Error('Wrong passcode — check it and try again.');
+  if (r.status === 413) throw new Error('That video is too large to upload here.');
+  if (!r.ok) {
+    const text = await r.text();
+    let message = text;
+    try { message = JSON.parse(text).message ?? text; } catch { /* plain-text error */ }
+    throw new Error(message || 'Upload failed');
+  }
   return (await r.json()) as { jobId: string };
 }
 

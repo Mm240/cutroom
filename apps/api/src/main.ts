@@ -17,6 +17,7 @@ function loadEnv() {
 loadEnv();
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 
 const REQUIRED = [
@@ -30,9 +31,22 @@ async function bootstrap() {
     throw new Error(`Missing env vars: ${missing.join(', ')}. Copy .env.example to .env.`);
   }
 
-  const app = await NestFactory.create(AppModule);
-  app.enableCors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:5173' });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // WEB_ORIGIN may list several origins, comma-separated. A bare hostname
+  // (how Render hands one service's address to another) is taken as https.
+  const origins = (process.env.WEB_ORIGIN ?? 'http://localhost:5173')
+    .split(',').map((o) => o.trim()).filter(Boolean)
+    .map((o) => (o.includes('://') ? o : `https://${o}`));
+  app.enableCors({ origin: origins });
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+
+  // In production the API also serves the built console, so one service is
+  // the whole app: same origin, no CORS, one URL to share.
+  const web = resolve(__dirname, '../../web/dist');
+  if (existsSync(web)) {
+    app.useStaticAssets(web);
+    new Logger('bootstrap').log(`Serving console from ${web}`);
+  }
 
   await app.listen(Number(process.env.PORT ?? 3000));
   new Logger('bootstrap').log(`Cutroom API on :${process.env.PORT ?? 3000}`);

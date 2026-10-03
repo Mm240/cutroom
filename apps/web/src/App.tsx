@@ -1,11 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getFormats, getLanguages, poll, submit, type Format, type Job, type Language } from './api';
+import {
+  getConfig, getFormats, getLanguages, poll, submit,
+  type ApiConfig, type Format, type Job, type Language,
+} from './api';
 import { ClipCard, Hero, Stages, Yield } from './components/Cutroom';
 
 const LANG_KEY = 'cutroom.language';
+const PASS_KEY = 'cutroom.passcode';
 
-function savedLanguage() {
-  try { return localStorage.getItem(LANG_KEY) ?? 'en-US'; } catch { return 'en-US'; }
+function saved(key: string, fallback = '') {
+  try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
+}
+
+function remember(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* remembered for this visit only */ }
 }
 
 function megabytes(bytes: number) {
@@ -15,7 +23,9 @@ function megabytes(bytes: number) {
 export default function App() {
   const [formats, setFormats] = useState<Format[]>([]);
   const [languages, setLanguages] = useState<Language[]>([]);
-  const [language, setLanguage] = useState(savedLanguage);
+  const [language, setLanguage] = useState(() => saved(LANG_KEY, 'en-US'));
+  const [config, setConfig] = useState<ApiConfig>();
+  const [passcode, setPasscode] = useState(() => saved(PASS_KEY));
   const [file, setFile] = useState<File | null>(null);
   const [clips, setClips] = useState(6);
   const [job, setJob] = useState<Job | null>(null);
@@ -28,6 +38,7 @@ export default function App() {
   useEffect(() => {
     getFormats().then(setFormats).catch(() => setError('API not reachable — is it running?'));
     getLanguages().then(setLanguages).catch(() => undefined);
+    getConfig().then(setConfig).catch(() => undefined);
     // A job in the URL survives a reload, mid-run or after.
     const id = new URLSearchParams(window.location.search).get('job');
     if (id) follow(id);
@@ -80,7 +91,7 @@ export default function App() {
     setSending(true);
     setStartedAt(Date.now());
     try {
-      const { jobId } = await submit(file, clips, language);
+      const { jobId } = await submit(file, clips, language, passcode || undefined);
       setSending(false);
       window.history.replaceState(null, '', `?job=${jobId}`);
       follow(jobId);
@@ -92,7 +103,7 @@ export default function App() {
 
   function chooseLanguage(code: string) {
     setLanguage(code);
-    try { localStorage.setItem(LANG_KEY, code); } catch { /* remembered for this visit only */ }
+    remember(LANG_KEY, code);
   }
 
   const p = job?.payload;
@@ -136,7 +147,7 @@ export default function App() {
             </span>
             <h2>Drop a long video here</h2>
             <p>Podcast, lecture, livestream, interview. Or <u>browse your files</u>.</p>
-            <span className="drop-meta tc">MP4 · MOV · WEBM — up to 500 MB</span>
+            <span className="drop-meta tc">MP4 · MOV · WEBM — up to {config?.maxUploadMb ?? 500} MB</span>
           </label>
         ) : (
           <div className="source">
@@ -189,7 +200,23 @@ export default function App() {
                       <button onClick={() => setClips((c) => Math.min(12, c + 1))} aria-label="More">+</button>
                     </div>
                   </div>
-                  <button className="btn go big" onClick={start} disabled={!file}>
+                  {config?.passcodeRequired && (
+                    <label className="field">
+                      <span>Passcode</span>
+                      <input
+                        className="select passcode"
+                        type="password"
+                        value={passcode}
+                        placeholder="Required to upload"
+                        onChange={(e) => { setPasscode(e.target.value); remember(PASS_KEY, e.target.value); }}
+                      />
+                    </label>
+                  )}
+                  <button
+                    className="btn go big"
+                    onClick={start}
+                    disabled={!file || (config?.passcodeRequired && !passcode)}
+                  >
                     <span aria-hidden>✂</span> Find the moments
                   </button>
                 </div>
