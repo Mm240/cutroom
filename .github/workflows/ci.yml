@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci || npm install
+      # No credentials, no network. The clip planner is the claim; this proves it.
+      - run: npm -w @cutroom/cutplan run test
+      - run: npx tsc -p apps/api/tsconfig.json --noEmit
+      - run: npx tsc -p apps/web/tsconfig.json --noEmit
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: No committed credentials
+        run: |
+          if git grep -nIE \
+            -e 'CLOUDINARY_API_SECRET[[:space:]]*=[[:space:]]*[A-Za-z0-9_-]{10,}' \
+            -e 'cloudinary://[0-9]+:[A-Za-z0-9_-]+@' \
+            -- ':!*.example' ':!.github/workflows/*'; then
+            echo "::error::Credential found. Rotate it, then remove it."
+            exit 1
+          fi
+          echo "Clean."
+      - name: .env must not be tracked
+        run: |
+          if git ls-files --error-unmatch .env 2>/dev/null; then
+            echo "::error::.env is tracked. Remove it and rotate every key."
+            exit 1
+          fi
+          echo "Clean."

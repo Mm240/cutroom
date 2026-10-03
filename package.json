@@ -1,0 +1,17 @@
+{
+  "name": "cutroom",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm -w @cutroom/cutplan run build && concurrently -n api,web -c magenta,cyan \"npm -w @cutroom/api run dev\" \"npm -w @cutroom/web run dev\"",
+    "test": "npm -w @cutroom/cutplan run test",
+    "verify": "node scripts/verify-cloudinary.mjs",
+    "infra": "docker compose up -d"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}
