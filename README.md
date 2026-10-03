@@ -65,6 +65,24 @@ fewer is treated as a trail-off rather than a landing.
 **Every pick is explained.** "Opens on a question, has a specific figure, lands
 its ending." An unexplained pick is a guess.
 
+## Listening in seconds
+
+Transcription is the long pole. Cloudinary's speech-to-text queues each
+request for about forty seconds however short the audio, so Cutroom
+transcribes with Whisper on Groq when `GROQ_API_KEY` is set:
+
+| 5-minute source | Listening |
+|---|---|
+| Cloudinary, one pass | 163s |
+| Cloudinary, 6 parallel chunks | ~43s |
+| Groq, compressed audio | 1.1s |
+| Groq, sent while the upload is still running | **done before the upload lands** |
+
+A fresh 5-minute video goes from upload to 20 ready clips in about nine
+seconds. The transcript is saved as `<publicId>.transcript` in Cloudinary's own
+format, so captions burn in exactly as before, and without a Groq key the
+parallel Cloudinary path still works.
+
 ## Transform chains worth reading
 
 Order matters and is not obvious:

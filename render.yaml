@@ -26,6 +26,10 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      # Fast transcription (seconds, not a minute). Optional: leave empty to
+      # use Cloudinary's speech-to-text.
+      - key: GROQ_API_KEY
+        sync: false
       # Uploads spend Cloudinary credits; only people with this can upload.
       - key: UPLOAD_PASSCODE
         sync: false

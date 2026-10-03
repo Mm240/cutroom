@@ -50,7 +50,7 @@ export function Hero() {
 
 const STAGES = [
   { key: 'uploading', label: 'Uploading', hint: 'Sending your video to Cloudinary.' },
-  { key: 'transcribing', label: 'Listening', hint: 'Transcribing every word, a minute of audio at a time, all at once.' },
+  { key: 'transcribing', label: 'Listening', hint: 'Transcribing every word — usually just a few seconds.' },
   { key: 'planning', label: 'Choosing moments', hint: 'Scoring thousands of windows for hooks, pace and endings.' },
   { key: 'rendering', label: 'Cutting', hint: 'Reframing and captioning each clip for every format.' },
 ];

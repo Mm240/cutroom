@@ -1,6 +1,6 @@
 import {
   BadRequestException, Body, CanActivate, Controller, ExecutionContext, Get,
-  Injectable, NotFoundException, Param, Post, UnauthorizedException,
+  Injectable, Logger, NotFoundException, Param, Post, UnauthorizedException,
   UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -10,6 +10,7 @@ import { unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { DEFAULT_LANGUAGE, FORMATS, LANGUAGES } from '@cutroom/cutplan';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { GroqService } from '../cloudinary/groq.service';
 import { CutProcessor } from './cut.processor';
 import { JobsStore } from '../store/jobs.store';
 
@@ -48,8 +49,11 @@ function md5File(path: string): Promise<string> {
 
 @Controller('api')
 export class VideosController {
+  private readonly log = new Logger(VideosController.name);
+
   constructor(
     private readonly cloud: CloudinaryService,
+    private readonly groq: GroqService,
     private readonly cut: CutProcessor,
     private readonly jobs: JobsStore,
   ) {}
@@ -98,7 +102,21 @@ export class VideosController {
       await this.jobs.patch(job.id, { stage: 'uploading', progress: 5 });
       const md5 = await md5File(file.path);
       const existing = await this.cloud.findExisting(md5, file.size, language);
+
+      // A new source small enough for Groq is transcribed from the file we
+      // already hold, while it uploads to Cloudinary — by the time the upload
+      // lands, the transcript is usually done and listening takes no time.
+      const early = !existing && this.groq.accepts(file.size)
+        ? this.groq.transcribeFile(file.path, file.originalname, language).catch((e) => {
+            this.log.warn(`Early transcription failed, the worker will retry: ${e.message}`);
+            return null;
+          })
+        : Promise.resolve(null);
+
       const asset = existing ?? (await this.cloud.upload(file.path, file.originalname, md5, language));
+      const entries = await early;
+      if (entries?.length) await this.cloud.saveTranscript(asset.publicId, entries);
+
       await this.jobs.patch(job.id, { progress: 12 }, { asset, reused: !!existing });
       await this.cut.enqueue({ jobId: job.id, asset, targetCount });
     } catch (e: any) {

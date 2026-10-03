@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { GroqService } from './groq.service';
 import { v2 as cloudinary } from 'cloudinary';
 import {
   DEFAULT_LANGUAGE, FORMATS, cuesFromWords, languageFor, mergeChunkTranscripts, planChunks,
@@ -43,7 +44,7 @@ export class CloudinaryService {
   private readonly log = new Logger(CloudinaryService.name);
   private readonly cloudName = env('CLOUDINARY_CLOUD_NAME');
 
-  constructor() {
+  constructor(private readonly groq: GroqService) {
     cloudinary.config({
       cloud_name: this.cloudName,
       api_key: env('CLOUDINARY_API_KEY'),
@@ -164,6 +165,15 @@ export class CloudinaryService {
       return this.toCues(existing);
     }
 
+    if (this.groq.enabled) {
+      try {
+        return this.toCues(await this.transcribeWithGroq(asset, onProgress));
+      } catch (e: any) {
+        // Groq is the fast path, not the only one.
+        this.log.warn(`Groq transcription failed, falling back to Cloudinary: ${e.message}`);
+      }
+    }
+
     const chunks = planChunks(asset.duration);
     if (!chunks.length) throw new Error('Could not read the length of this video.');
 
@@ -192,6 +202,39 @@ export class CloudinaryService {
       // The chunks were only ever scaffolding.
       this.removeChunks(chunkIds).catch(() => undefined);
     }
+  }
+
+  /**
+   * Whisper on Groq, fed compressed mono-ish audio cut by Cloudinary. At 32
+   * kbps a 25-minute piece is about 6 MB, well under Groq's limit, so long
+   * sources go as a few pieces in parallel and short ones as one.
+   */
+  private async transcribeWithGroq(
+    asset: VideoAsset,
+    onProgress?: (done: number, total: number) => void | Promise<void>,
+  ): Promise<TranscriptEntry[]> {
+    const chunks = planChunks(asset.duration, { target: 25 * 60, maxChunks: 8 });
+    if (!chunks.length) throw new Error('Could not read the length of this video.');
+    let done = 0;
+    await onProgress?.(0, chunks.length);
+
+    const parts = await Promise.all(
+      chunks.map(async (chunk) => {
+        const trim = chunks.length > 1 ? `so_${chunk.from.toFixed(2)},eo_${chunk.to.toFixed(2)}/` : '';
+        const url =
+          `https://res.cloudinary.com/${this.cloudName}/video/upload/` +
+          `${trim}br_32k/${asset.publicId}.mp3`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(180_000) });
+        if (!res.ok) throw new Error(`audio ${res.status} ${res.headers.get('x-cld-error') ?? ''}`);
+        const entries = await this.groq.transcribe(await res.blob(), `chunk-${chunk.index}.mp3`, asset.language);
+        await onProgress?.(++done, chunks.length);
+        return { chunk, entries };
+      }),
+    );
+
+    const merged = mergeChunkTranscripts(parts);
+    await this.saveTranscript(asset.publicId, merged);
+    return merged;
   }
 
   /** Upload one chunk's audio, cut by Cloudinary from the source, for speech-to-text. */
@@ -253,7 +296,8 @@ export class CloudinaryService {
     return (await res.json()) as TranscriptEntry[];
   }
 
-  private async saveTranscript(publicId: string, entries: TranscriptEntry[]) {
+  /** Store a transcript where Cloudinary would have written its own. */
+  async saveTranscript(publicId: string, entries: TranscriptEntry[]) {
     const body = Buffer.from(JSON.stringify(entries)).toString('base64');
     await cloudinary.uploader.upload(`data:application/json;base64,${body}`, {
       resource_type: 'raw',

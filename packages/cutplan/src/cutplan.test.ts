@@ -3,6 +3,7 @@ import { fillerPenalty, hookScore, paceScore, plan, tailPenalty, titleFor, wordC
 import { FORMATS } from './formats';
 import { cuesFromWords } from './cues';
 import { mergeChunkTranscripts, planChunks } from './chunks';
+import { entriesFromWhisper, whisperLanguage } from './whisper';
 import type { Cue } from './types';
 
 /** Build a cue track from lines, each given a duration from its word count. */
@@ -253,5 +254,41 @@ describe('parallel transcription chunks', () => {
     ]);
     expect(merged.map((e) => e.transcript)).toEqual(['hello edge', 'later']);
     expect(merged[1].words[0].start_time).toBe(12);
+  });
+});
+
+describe('whisper transcripts', () => {
+  const res = {
+    segments: [
+      { start: 0, end: 4, text: ' If you make your bed.', avg_logprob: -0.2, no_speech_prob: 0.01 },
+      { start: 4, end: 9, text: ' Thank you.', avg_logprob: -1.4, no_speech_prob: 0.9 },
+      { start: 9, end: 12, text: ' Then this.', avg_logprob: -0.3, no_speech_prob: 0.02 },
+    ],
+    words: [
+      { word: 'If', start: 0.5, end: 0.7 }, { word: 'you', start: 0.7, end: 0.9 },
+      { word: 'make', start: 1, end: 1.3 }, { word: 'your', start: 1.3, end: 1.5 }, { word: 'bed.', start: 1.5, end: 2 },
+      { word: 'Thank', start: 5, end: 5.3 }, { word: 'you.', start: 5.3, end: 5.6 },
+      { word: 'Then', start: 9.2, end: 9.5 }, { word: 'this.', start: 9.5, end: 10 },
+    ],
+  };
+
+  it('groups words into one entry per segment, in Cloudinary\'s format', () => {
+    const entries = entriesFromWhisper(res);
+    expect(entries.map((e) => e.transcript)).toEqual(['If you make your bed.', 'Then this.']);
+    expect(entries[0].words[4]).toEqual({ word: 'bed.', start_time: 1.5, end_time: 2 });
+  });
+
+  it('drops a segment Whisper itself marks as silence', () => {
+    expect(entriesFromWhisper(res).some((e) => e.transcript.includes('Thank'))).toBe(false);
+  });
+
+  it('shifts timings by a chunk offset', () => {
+    expect(entriesFromWhisper(res, 100)[1].words[0].start_time).toBe(109.2);
+  });
+
+  it('maps our language tags to Whisper codes', () => {
+    expect(whisperLanguage('hi-IN')).toBe('hi');
+    expect(whisperLanguage('pa-Guru-IN')).toBe('pa');
+    expect(whisperLanguage('cmn-Hans-CN')).toBe('zh');
   });
 });

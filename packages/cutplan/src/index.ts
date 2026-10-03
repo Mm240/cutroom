@@ -4,3 +4,4 @@ export * from './formats';
 export * from './languages';
 export * from './cues';
 export * from './chunks';
+export * from './whisper';
