@@ -6,6 +6,19 @@
 
 Built for *Pixels to Products — Cloudinary AI Hackathon 2026*, Track 3.
 
+[![Cutroom landing page — click to open the live app](docs/screenshots/landing.jpg)](https://cutroom-1fvh.onrender.com)
+
+<table>
+  <tr>
+    <td width="68%"><img src="docs/screenshots/results.jpg" alt="Ranked clips with score, filmstrip, preview and per-format downloads"></td>
+    <td width="32%"><img src="docs/screenshots/mobile.jpg" alt="The results view on a phone"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Ranked clips — score, why it was picked, a six-frame filmstrip, and every format ready to download</sub></td>
+    <td align="center"><sub>Works on a phone</sub></td>
+  </tr>
+</table>
+
 ---
 
 ## The problem
