@@ -2,6 +2,8 @@
 
 **One long video in. A week of publishable clips out.**
 
+**▶ Live: [cutroom-1fvh.onrender.com](https://cutroom-1fvh.onrender.com)** — uploads need a passcode; finished results links are open to anyone.
+
 Built for *Pixels to Products — Cloudinary AI Hackathon 2026*, Track 3.
 
 ---
